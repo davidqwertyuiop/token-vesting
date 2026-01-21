@@ -18,7 +18,7 @@ Open [http://localhost:3000](http://localhost:3000), connect your wallet, and in
 ## What's Included
 
 - **Wallet connection** via `@solana/react-hooks` with auto-discovery
-- **SOL Vault program** - deposit and withdraw SOL from a personal PDA vault
+- **SOL Vesting program** - deposit and withdraw SOL from a personal PDA vault
 - **Codama-generated client** - type-safe program interactions using `@solana/kit`
 - **Tailwind CSS v4** with light/dark mode
 
@@ -43,8 +43,6 @@ Open [http://localhost:3000](http://localhost:3000), connect your wallet, and in
 │   └── page.tsx               # Main page
 ├── anchor/                    # Anchor workspace
 │   └── programs/vault/        # Vault program (Rust)
-└── codama.json                # Codama client generation config
-```
 
 ## Deploy Your Own Vault
 

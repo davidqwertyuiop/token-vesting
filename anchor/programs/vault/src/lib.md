@@ -1,12 +1,13 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{associated_token::AssociatedToken, token_interface::*};
 
+#[cfg(test)]
+mod tests;
+
 declare_id!("FyoRGcMWzvNwuRSLFnecpVGG1L1R5YkHZ21v46ddvv32");
 
 #[program]
 pub mod vesting {
-    use anchor_spl::token_interface;
-
     use super::*;
 
     pub fn create_vesting_account(
@@ -14,6 +15,7 @@ pub mod vesting {
         company_name: String,
     ) -> Result<()> {
         (*ctx.accounts.vesting_account) = VestingAccount {
+            //Dereferenced because you want to work with the action data and modify
             owner: ctx.accounts.signer.key(),
             mint: ctx.accounts.mint.key(),
             treasury_token_account: ctx.accounts.treasury_token_account.key(),
@@ -44,25 +46,28 @@ pub mod vesting {
         };
         Ok(())
     }
+//Differnce between referencing and dereferencing
+    1. dereferencing is used when you want to manipulate the data stored in the data operation
+    2. Referencing is used when you want to access the data stored in the data operation/borrowing
+    pub fn claim_tokens(ctx: Context<ClaimTokens>, company_name: String) -> Result<()> {
+       let employee_account =&mut ctx.accounts.employee_account;
+       let now = Clock::get()?.unix_timestamp; // to get the current time of the token transsaction
+    to check if the current time is less than the cliff time else no token 
+    can be claimed 
 
-    pub fn claim_tokens(ctx: Context<ClaimTokens>, _company_name: String) -> Result<()> {
-        let employee_account = &mut ctx.accounts.employee_account;
-
-        let now = Clock::get()?.unix_timestamp;
-        if now < employee_account.cliff_time {
-            return Err(ErrorCode::ClaimNotAvailableYet.into());
-        }
-
+    if now < employee_account.cliff_time {
+        return Err(ErrorCode::CliffNotReached.into());
+    }
+       
         let time_since_start = now.saturating_sub(employee_account.start_time);
-        let total_vesting_time = employee_account
-            .end_time
-            .saturating_sub(employee_account.start_time);
+        let total_vesting_time = employee_account.end_time.saturating_sub(employee_account.start_time);
+        let amount_to_release = (employee_account.total_amount * time_since_start) / total_vesting_time;
+        //For Underflow error use saturated sub to not subtract lesser than 0 
 
-        if total_vesting_time == 0 {
+            if total_vesting_time == 0 {
             return Err(ErrorCode::InvalidVestingPeriod.into());
         }
-
-        let vested_amount = if now >= employee_account.end_time {
+          let _vested_amount = if now >= employee_account.end_time {
             employee_account.total_amount
         } else {
             match employee_account
@@ -72,19 +77,19 @@ pub mod vesting {
                 Some(product) => product / total_vesting_time as u64,
                 None => return Err(ErrorCode::CalculationOverflow.into()),
             }
-        };
-
-        let claimable_amount = vested_amount.saturating_sub(employee_account.total_withdrawn);
+        }; //to check for overflow and underflow errors
+           let claimable_amount = vested_amount.saturating_sub(employee_account.total_withdrawn);
         if claimable_amount == 0 {
             return Err(ErrorCode::NoTokensToClaim.into());
         }
-
-        //Transfer
+        Now we make a cross program identification to transfer the tokens from the treasury account to the employee account
+        cpi call basically
+          //Transfer
         let transfer_cpi_accounts = TransferChecked {
             from: ctx.accounts.treasury_token_account.to_account_info(),
-            mint: ctx.accounts.mint.to_account_info(),
             to: ctx.accounts.employee_token_account.to_account_info(),
-            authority: ctx.accounts.treasury_token_account.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            authority: ctx.accounts.vesting_account.to_account_info(),
         };
         let transfer_cpi_program = ctx.accounts.token_program.to_account_info();
 
@@ -96,10 +101,8 @@ pub mod vesting {
         let cpi_context =
             CpiContext::new(transfer_cpi_program, transfer_cpi_accounts).with_signer(signer_seeds);
         let decimals = ctx.accounts.mint.decimals;
-        token_interface::transfer_checked(cpi_context, claimable_amount, decimals)?;
-
-        employee_account.total_withdrawn += claimable_amount;
-
+        token_interface::transfer_checked(cpi_context, claimable_amount, decimals);
+       //Transferring from one account to another one 
         Ok(())
     }
 }
@@ -109,7 +112,7 @@ pub mod vesting {
 #[instruction(company_name: String)]
 pub struct CreateVestingAccount<'info> {
     #[account(mut)]
-    pub signer: Signer<'info>,
+    pub signer: Signer<'info>, //To be paying rent, so it changes
     #[account(
         init,
         payer = signer,
@@ -137,8 +140,9 @@ pub struct CreateVestingAccount<'info> {
 #[derive(Accounts)]
 pub struct CreateEmployeeAccount<'info> {
     #[account(mut)]
-    pub owner: Signer<'info>,
-    pub beneficiary: SystemAccount<'info>,
+    //The owner is not the employee but the employer who has access to the account
+    pub owner: Signer<'info>, //To be paying rent, so it changes
+    pub beneficiary: SystemAccount<'info>, //To be paying rent, so it changes
 
     #[account(has_one = owner)]
     pub vesting_account: Account<'info, VestingAccount>,
@@ -160,7 +164,7 @@ pub struct CreateEmployeeAccount<'info> {
 #[instruction(company_name: String)]
 pub struct ClaimTokens<'info> {
     #[account(mut)]
-    pub beneficiary: Signer<'info>,
+    pub beneficiary: Signer<'info>, //To be paying rent, so it changes
     #[account(
         mut,
         seeds = [ b"emplyee_vesting", 
@@ -185,6 +189,8 @@ pub struct ClaimTokens<'info> {
     #[account(mut)]
     pub treasury_token_account: InterfaceAccount<'info, TokenAccount>,
 
+    //Associate token account, for some users who have their tokens initialized
+    //using init if needed
     #[account(
         init,
         payer = beneficiary,
@@ -198,14 +204,18 @@ pub struct ClaimTokens<'info> {
     pub system_program: Program<'info, System>,
 }
 
+//On solana all accounts are stateless, so now we are creating a struct to store the data
 #[account]
 #[derive(InitSpace)]
 pub struct VestingAccount {
-    pub owner: Pubkey,
-    pub mint: Pubkey,
+    pub owner: Pubkey, //whoevver has permissions for vesting
+    //distributing spl  tokens
+    pub mint: Pubkey, //TO store the SpL tokens
+    //To store employer's SPL tokens that they used to add another employee
+    //and recieving vested tokens
     pub treasury_token_account: Pubkey,
     #[max_len(50)]
-    pub company_name: String,
+    pub company_name: String, //To store the company name
     pub treasury_bump: u8,
     pub bump: u8,
 }
@@ -213,15 +223,16 @@ pub struct VestingAccount {
 #[account]
 #[derive(InitSpace)]
 pub struct EmployeeAccount {
-    pub beneficiary: Pubkey,
-    pub start_time: i64,
-    pub end_time: i64,
-    pub cliff_time: i64,
-    pub vesting_account: Pubkey,
-    pub total_amount: u64,
-    pub total_withdrawn: u64,
+    pub beneficiary: Pubkey,     //whoever is recieving the tokens
+    pub start_time: i64,         //when the vesting starts
+    pub end_time: i64,           //when the vesting ends
+    pub cliff_time: i64, //How long the employee has to wait before they can withdraw any tokens
+    pub vesting_account: Pubkey, //To store the vesting account
+    pub total_amount: u64, //Total amount of tokens to be vested
+    pub total_withdrawn: u64, //Amount of tokens already released
     pub bump: u8,
 }
+
 
 #[error_code]
 pub enum ErrorCode {
@@ -229,8 +240,10 @@ pub enum ErrorCode {
     ClaimNotAvailableYet,
     #[msg("Invalid vesting period")]
     InvalidVestingPeriod,
-    #[msg("Calculation overflow")]
-    CalculationOverflow,
-    #[msg("No tokens to claim")]
-    NoTokensToClaim,
 }
+
+
+Tyoes of errors : 
+Underflow and overflow errors 
+Underflow errors are errors that occur when a calculation occurs less than the minimum value of the data type
+Overflow errors are errors that occur when a calculation occurs greater than the maximum value of the data type
