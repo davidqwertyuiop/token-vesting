@@ -9,4 +9,11 @@
 export * from "./accounts";
 export * from "./errors";
 export * from "./instructions";
-export * from "./programs";
+export {
+  VESTING_PROGRAM_ADDRESS,
+  VestingInstruction,
+  identifyVestingInstruction,
+  identifyVestingAccount,
+  type ParsedVestingInstruction,
+  VestingAccount as VestingAccountKind,
+} from "./programs";
