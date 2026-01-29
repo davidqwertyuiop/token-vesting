@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{associated_token::AssociatedToken, token_interface::*};
 
-declare_id!("FyoRGcMWzvNwuRSLFnecpVGG1L1R5YkHZ21v46ddvv32");
+declare_id!("EfARhmvRtpzbuGCBHBtnFxLtYFbH2FnBcKKmKVg31Ucs");
 
 #[program]
 pub mod vesting {
@@ -31,6 +31,7 @@ pub mod vesting {
         cliff_time: i64,
         total_amount: u64,
         total_withdrawn: u64,
+        name: String,
     ) -> Result<()> {
         (*ctx.accounts.employee_account) = EmployeeAccount {
             beneficiary: ctx.accounts.beneficiary.key(),
@@ -40,6 +41,7 @@ pub mod vesting {
             vesting_account: ctx.accounts.vesting_account.key(),
             total_amount,
             total_withdrawn,
+            name,
             bump: ctx.bumps.employee_account,
         };
         Ok(())
@@ -186,7 +188,7 @@ pub struct ClaimTokens<'info> {
     pub treasury_token_account: InterfaceAccount<'info, TokenAccount>,
 
     #[account(
-        init,
+        init_if_needed,
         payer = beneficiary,
         associated_token::mint = mint,
         associated_token::authority = beneficiary,
@@ -220,6 +222,8 @@ pub struct EmployeeAccount {
     pub vesting_account: Pubkey,
     pub total_amount: u64,
     pub total_withdrawn: u64,
+    #[max_len(50)]
+    pub name: String,
     pub bump: u8,
 }
 

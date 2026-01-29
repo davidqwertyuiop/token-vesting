@@ -5,7 +5,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-vesting = "FyoRGcMWzvNwuRSLFnecpVGG1L1R5YkHZ21v46ddvv32"
+vesting = "EfARhmvRtpzbuGCBHBtnFxLtYFbH2FnBcKKmKVg31Ucs"
+
+[programs.localnet]
+vesting = "EfARhmvRtpzbuGCBHBtnFxLtYFbH2FnBcKKmKVg31Ucs"
 
 [registry]
 url = "https://api.apr.dev"
@@ -15,4 +18,4 @@ cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "cargo test"
+test = "npx mocha -r tsx tests/**/*.ts --timeout 60000"
